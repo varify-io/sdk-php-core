@@ -11,15 +11,17 @@ final readonly class Config
      */
     private function __construct(
         public array $experiments,
+        /** Changes whenever the delivery file changes; part of every cache variant. */
+        public string $version,
         private bool $available,
     ) {}
 
     /**
      * @param list<Experiment> $experiments
      */
-    public static function of(array $experiments): self
+    public static function of(array $experiments, string $version): self
     {
-        return new self($experiments, true);
+        return new self($experiments, $version, true);
     }
 
     /**
@@ -27,7 +29,7 @@ final readonly class Config
      */
     public static function unavailable(): self
     {
-        return new self([], false);
+        return new self([], 'unavailable', false);
     }
 
     public function isAvailable(): bool

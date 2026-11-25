@@ -21,6 +21,14 @@ final class CookieCodec
 {
     public static function encode(State $state): string
     {
+        return $state->visitorId->value . '.' . self::encodeAssignments($state);
+    }
+
+    /**
+     * The part after the uid: `{experimentId}-{variationId}_…`, sorted by experiment id.
+     */
+    public static function encodeAssignments(State $state): string
+    {
         $assignments = $state->assignments;
         ksort($assignments);
 
@@ -29,7 +37,7 @@ final class CookieCodec
             $entries[] = "{$experimentId}-{$variationId}";
         }
 
-        return $state->visitorId->value . '.' . implode('_', $entries);
+        return implode('_', $entries);
     }
 
     /**

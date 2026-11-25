@@ -22,7 +22,8 @@ final class TrackingSnippet
 {
     /**
      * Hands each exposure to `window.varify.trackServerSide`, or queues it in `window.varify.serverSideQueue` until
-     * varify.js loads and drains it. varify.js applies consent before anything is sent.
+     * varify.js loads and drains it. varify.js applies consent before anything is sent. varify.js tracks every call,
+     * so when separately rendered fragments each bring a snippet, the first exposure per experiment on the page wins.
      *
      * @param list<Tracking> $exposures
      */
@@ -39,7 +40,9 @@ final class TrackingSnippet
         );
         $nonceAttribute = $nonce === '' ? '' : ' nonce="' . htmlspecialchars($nonce, ENT_QUOTES) . '"';
 
-        return "<script{$nonceAttribute}>(function(w,p){var v=w.varify=w.varify||{};p.forEach(function(e){"
+        return "<script{$nonceAttribute}>(function(w,p){var v=w.varify=w.varify||{},"
+            . 's=w.varifyServerSideExposed=w.varifyServerSideExposed||{};p.forEach(function(e){'
+            . 'if(s[e.experiment.id]){return}s[e.experiment.id]=1;'
             . "if(typeof v.trackServerSide==='function'){v.trackServerSide(e)}"
             . "else{(v.serverSideQueue=v.serverSideQueue||[]).push(e)}})})(window,{$payloads});</script>";
     }

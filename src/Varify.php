@@ -8,13 +8,14 @@ use Varify\Core\Assignment\Assignment;
 use Varify\Core\Assignment\Evaluation;
 use Varify\Core\Assignment\Evaluator;
 use Varify\Core\Assignment\Tracking;
-use Varify\Core\Http\ConfigLoader;
+use Varify\Core\Cache\CacheVariant;
 use Varify\Core\Id\VisitorId;
 use Varify\Core\Request\BotDetector;
 use Varify\Core\Request\ForcedVariation;
 use Varify\Core\Request\Globals;
 use Varify\Core\Request\VarifyRequest;
 use Varify\Core\State\CookieCodec;
+use Varify\Core\State\State;
 use Varify\Core\Tracking\TrackingSnippet;
 
 use function array_key_exists;
@@ -30,7 +31,11 @@ final class Varify
     /** @var list<Tracking> */
     private array $exposures = [];
 
-    private function __construct(private readonly ?Evaluation $evaluation) {}
+    private function __construct(
+        private readonly ?Evaluation $evaluation,
+        private readonly bool $writable,
+        private readonly CacheVariant $cacheVariant,
+    ) {}
 
     /**
      * Never throws: a failed config load shows the original and tracks nothing. Bots get no id and see the original.
@@ -38,24 +43,49 @@ final class Varify
     public static function forRequest(VarifyOptions $options, VarifyRequest $request): self
     {
         if (BotDetector::isBot($request->userAgent)) {
-            return new self(null);
+            return self::none();
         }
 
-        $loader = new ConfigLoader(
-            $options->transport,
-            $options->cache,
-            $options->configUrl,
-            $options->timeoutMs,
-            $options->cacheTtlSeconds,
-            $options->onError,
-        );
-        $evaluator = new Evaluator(VisitorId::generate(...));
+        return self::evaluate($options, $request, CookieCodec::decode($request->cookieValue), true);
+    }
 
-        return new self($evaluator->evaluate(
-            $loader->load(),
-            CookieCodec::decode($request->cookieValue),
+    /**
+     * For a request that must not assign or write the cookie, such as a fragment rendered separately from its page:
+     * a visitor without a cookie sees the original, untracked. A visitor with one gets the same assignments as on the
+     * page, because bucketing is deterministic.
+     */
+    public static function readOnly(VarifyOptions $options, VarifyRequest $request): self
+    {
+        $stored = CookieCodec::decode($request->cookieValue);
+        if (BotDetector::isBot($request->userAgent) || $stored->isAnonymous()) {
+            return new self(null, false, CacheVariant::uncacheable());
+        }
+
+        return self::evaluate($options, $request, $stored, false);
+    }
+
+    /**
+     * Every experiment shows the original, untracked; for bots, or where Varify is not configured.
+     */
+    public static function none(): self
+    {
+        return new self(null, false, CacheVariant::bot());
+    }
+
+    private static function evaluate(
+        VarifyOptions $options,
+        VarifyRequest $request,
+        State $stored,
+        bool $writable,
+    ): self {
+        $config = $options->configLoader()->load();
+        $evaluation = (new Evaluator(VisitorId::generate(...)))->evaluate(
+            $config,
+            $stored,
             ForcedVariation::parse($request->forceParam),
-        ));
+        );
+
+        return new self($evaluation, $writable, CacheVariant::of($config->version, $evaluation->state));
     }
 
     /**
@@ -108,7 +138,16 @@ final class Varify
      */
     public function needsCookieWrite(): bool
     {
-        return $this->evaluation !== null && $this->evaluation->changed;
+        return $this->writable && $this->evaluation !== null && $this->evaluation->changed;
+    }
+
+    /**
+     * The cache variant of the response this request renders, i.e. after the assignments made in it. It matches what
+     * `CacheVariant::forRequest()` computes for this visitor's next request.
+     */
+    public function cacheVariant(): CacheVariant
+    {
+        return $this->cacheVariant;
     }
 
     public function cookieValue(): string

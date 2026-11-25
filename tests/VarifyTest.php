@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Varify\Core\Cache\CacheVariant;
 use Varify\Core\Id\VisitorId;
 use Varify\Core\Request\VarifyRequest;
 use Varify\Core\Tests\Support\FakeTransport;
@@ -86,6 +87,42 @@ final class VarifyTest extends TestCase
         static::assertTrue($varify->assignment(48812)->isOriginal());
         static::assertFalse($varify->needsCookieWrite());
         static::assertSame('', $varify->trackingSnippet());
+    }
+
+    #[Test]
+    public function itsCacheVariantIsTheOneTheVisitorsNextRequestLooksUp(): void
+    {
+        $varify = Varify::forRequest(self::options(), new VarifyRequest('', '', self::BROWSER));
+        $nextRequest = new VarifyRequest($varify->cookieValue(), '', self::BROWSER);
+
+        $variant = $varify->cacheVariant();
+
+        static::assertSame(CacheVariant::forRequest(self::options(), $nextRequest)->key, $variant->key);
+    }
+
+    #[Test]
+    public function readOnlyShowsAVisitorWithoutACookieTheOriginalWithoutAssigning(): void
+    {
+        $request = new VarifyRequest('', '', self::BROWSER);
+
+        $varify = Varify::readOnly(self::options(), $request);
+
+        static::assertTrue($varify->assignment(48812)->isOriginal());
+        static::assertTrue($varify->visitorId()->isNone());
+        static::assertFalse($varify->needsCookieWrite());
+        static::assertFalse($varify->cacheVariant()->cacheable);
+    }
+
+    #[Test]
+    public function readOnlyAssignsAKnownVisitorLikeThePageButNeverWritesTheCookie(): void
+    {
+        $request = new VarifyRequest(Fixtures::VISITOR_ID . '.48812-48838', '', self::BROWSER);
+
+        $varify = Varify::readOnly(self::options(), $request);
+
+        static::assertTrue($varify->assignment(48812)->is(48838));
+        static::assertTrue($varify->assignment(269)->is(311));
+        static::assertFalse($varify->needsCookieWrite());
     }
 
     private static function options(): VarifyOptions

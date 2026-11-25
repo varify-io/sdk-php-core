@@ -19,6 +19,8 @@ use function is_float;
 use function is_int;
 use function is_string;
 use function json_decode;
+use function sha1;
+use function substr;
 
 use const JSON_THROW_ON_ERROR;
 
@@ -40,7 +42,7 @@ final class ConfigParser
             $experiments[] = self::experiment($experiment);
         }
 
-        return Config::of($experiments);
+        return Config::of($experiments, substr(sha1($json), 0, 12));
     }
 
     private static function experiment(mixed $data): Experiment

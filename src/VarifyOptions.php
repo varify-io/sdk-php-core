@@ -6,6 +6,7 @@ namespace Varify\Core;
 
 use Closure;
 use Psr\SimpleCache\CacheInterface;
+use Varify\Core\Http\ConfigLoader;
 use Varify\Core\Http\CurlTransport;
 use Varify\Core\Http\NoCache;
 use Varify\Core\Http\Transport;
@@ -42,6 +43,18 @@ final readonly class VarifyOptions
             new CurlTransport(),
             static function (VarifyError $error): void {},
             CookieOptions::defaults(),
+        );
+    }
+
+    public function configLoader(): ConfigLoader
+    {
+        return new ConfigLoader(
+            $this->transport,
+            $this->cache,
+            $this->configUrl,
+            $this->timeoutMs,
+            $this->cacheTtlSeconds,
+            $this->onError,
         );
     }
 
