@@ -9,7 +9,7 @@
         "server-side",
         "varify"
     ],
-    "homepage": "https://gitlab.com/varify/varify-sdk-php/-/tree/main/packages/core",
+    "homepage": "https://github.com/varify-io/sdk-php/tree/main/packages/core",
     "require": {
         "php": "^8.2",
         "ext-curl": "*",
